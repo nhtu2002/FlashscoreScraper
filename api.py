@@ -1,7 +1,8 @@
 import os
-from typing import Optional, List
+from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from flashscorescraper import scrape_odds, scrape_event, scrape_event_info
 from scraper.scraper_factory import ScraperFactory
 from utils.detect_sport import detect_sport_from_url
@@ -9,7 +10,6 @@ from models.odds_filter import OddsFilter
 
 app = FastAPI(title="Flashscore Scraper API")
 
-# Cho phép file HTML (mở từ máy tính hoặc web khác) gọi API không bị lỗi CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,9 +18,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Trả về giao diện index.html khi mở link Railway trực tiếp
 @app.get("/")
-def health_check():
-    return {"status": "ok", "message": "Flashscore Scraper API is running!"}
+def serve_ui():
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    return {"status": "ok", "message": "API dang chay, nhung chua tim thay file index.html"}
 
 @app.get("/api/scrape")
 def run_scraper(
@@ -28,8 +31,8 @@ def run_scraper(
     url: str = Query(..., description="Link trận đấu hoặc giải đấu Flashscore"),
     sport: Optional[str] = Query(None, description="football, tennis, volleyball..."),
     engine: str = Query("playwright", description="playwright hoặc curl"),
-    with_stats: bool = Query(False, description="Lấy thêm thống kê trận đấu (chỉ dùng cho action=event)"),
-    odds_types: Optional[str] = Query(None, description="Các loại kèo cách nhau dấu phẩy, vd: 1x2-odds,over-under")
+    with_stats: bool = Query(False, description="Lấy thêm thống kê trận đấu"),
+    odds_types: Optional[str] = Query(None, description="Các loại kèo cách nhau dấu phẩy")
 ):
     try:
         detected_sport = sport if sport else detect_sport_from_url(url)
@@ -51,7 +54,7 @@ def run_scraper(
                 return scraper.fetch_and_parse_league(url)
 
         else:
-            raise HTTPException(status_code=400, detail="Action không hợp lệ. Chọn: event, odds, event-info, league")
+            raise HTTPException(status_code=400, detail="Action không hợp lệ.")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
