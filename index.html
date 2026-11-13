@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flashscore Scraper Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 font-sans">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-400">⚽ Flashscore Scraper UI</h1>
+        <p class="text-sm text-slate-400">Giao diện lấy dữ liệu trực tiếp từ API Railway</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400">Railway API URL:</span>
+        <input id="apiBaseUrl" type="text" placeholder="https://ten-app.up.railway.app"
+          class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm w-64 focus:outline-none focus:border-emerald-500" />
+      </div>
+    </div>
+
+    <!-- Form điều khiển -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Link Flashscore (Trận đấu hoặc Giải đấu)</label>
+          <input id="targetUrl" type="url" placeholder="https://www.flashscore.com/match/football/..."
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Loại dữ liệu cần lấy</label>
+          <select id="actionType" onchange="toggleOptions()"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+            <option value="event">Thông tin trận đấu (Event)</option>
+            <option value="league">Danh sách trận của giải (League)</option>
+            <option value="odds">Tỷ lệ kèo (Odds)</option>
+            <option value="event-info">BXH / Đối đầu H2H (Event Info)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Môn thể thao (Tùy chọn)</label>
+          <input id="sportType" type="text" placeholder="Tự nhận diện (football...)"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Engine cào</label>
+          <select id="engineType"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+            <option value="playwright">Playwright (Đầy đủ JS)</option>
+            <option value="curl">Curl (Nhanh)</option>
+          </select>
+        </div>
+
+        <!-- Tùy chọn phụ theo Action -->
+        <div id="statsOption" class="flex items-center h-10">
+          <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-300">
+            <input id="withStats" type="checkbox" class="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0" />
+            <span>Kèm thống kê (--with-stats)</span>
+          </label>
+        </div>
+
+        <div id="oddsOption" class="hidden">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Loại kèo (cách dấu phẩy)</label>
+          <input id="oddsTypes" type="text" placeholder="1x2-odds,over-under"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div class="md:col-start-4">
+          <button id="scrapeBtn" onclick="fetchData()"
+            class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2">
+            <span>Lấy dữ liệu</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trạng thái & Kết quả -->
+    <div id="statusBox" class="hidden rounded-lg p-3 text-sm"></div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+      <div class="flex items-center justify-between px-4 py-3 bg-slate-800/60 border-b border-slate-800">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Kết quả JSON</span>
+        <div class="flex gap-2">
+          <button onclick="copyJson()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-slate-200">Copy JSON</button>
+          <button onclick="downloadJson()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-slate-200">Tải file .json</button>
+        </div>
+      </div>
+      <pre id="jsonOutput" class="p-4 text-xs md:text-sm text-emerald-300 overflow-x-auto max-h-[550px] font-mono leading-relaxed">// Nhập link Railway API và link Flashscore phía trên để bắt đầu...</pre>
+    </div>
+  </div>
+
+  <script>
+    // Lưu tự động Railway URL vào trình duyệt để lần sau không phải nhập lại
+    const apiInput = document.getElementById('apiBaseUrl');
+    apiInput.value = localStorage.getItem('railway_flashscore_api') || '';
+    apiInput.addEventListener('change', () => {
+      localStorage.setItem('railway_flashscore_api', apiInput.value.trim().replace(/\/$/, ''));
+    });
+
+    let lastData = null;
+
+    function toggleOptions() {
+      const action = document.getElementById('actionType').value;
+      document.getElementById('statsOption').classList.toggle('hidden', action !== 'event');
+      document.getElementById('oddsOption').classList.toggle('hidden', action !== 'odds');
+    }
+
+    function showStatus(msg, isError = false) {
+      const box = document.getElementById('statusBox');
+      box.textContent = msg;
+      box.className = `rounded-lg p-3 text-sm ${isError ? 'bg-red-950/70 border border-red-800 text-red-300' : 'bg-blue-950/70 border border-blue-800 text-blue-300'}`;
+      box.classList.remove('hidden');
+    }
+
+    async function fetchData() {
+      const baseUrl = apiInput.value.trim().replace(/\/$/, '');
+      const targetUrl = document.getElementById('targetUrl').value.trim();
+      const action = document.getElementById('actionType').value;
+      const sport = document.getElementById('sportType').value.trim();
+      const engine = document.getElementById('engineType').value;
+      const withStats = document.getElementById('withStats').checked;
+      const oddsTypes = document.getElementById('oddsTypes').value.trim();
+
+      if (!baseUrl) return showStatus('Vui lòng nhập Railway API URL ở góc trên bên phải.', true);
+      if (!targetUrl) return showStatus('Vui lòng nhập link Flashscore cần lấy dữ liệu.', true);
+
+      const params = new URLSearchParams({ action, url: targetUrl, engine });
+      if (sport) params.append('sport', sport);
+      if (action === 'event' && withStats) params.append('with_stats', 'true');
+      if (action === 'odds' && oddsTypes) params.append('odds_types', oddsTypes);
+
+      const btn = document.getElementById('scrapeBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ Đang cào dữ liệu...</span>';
+      showStatus('Đang gửi yêu cầu tới Railway (Playwright có thể mất 5 - 15 giây)...');
+
+      try {
+        const res = await fetch(`${baseUrl}/api/scrape?${params.toString()}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.detail || `Lỗi HTTP ${res.status}`);
+        }
+
+        lastData = data;
+        document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
+        showStatus('✅ Lấy dữ liệu thành công!');
+      } catch (err) {
+        document.getElementById('jsonOutput').textContent = JSON.stringify({ error: err.message }, null, 2);
+        showStatus(`❌ Lỗi: ${err.message}`, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Lấy dữ liệu</span>';
+      }
+    }
+
+    function copyJson() {
+      if (!lastData) return;
+      navigator.clipboard.writeText(JSON.stringify(lastData, null, 2));
+      showStatus('📋 Đã copy toàn bộ JSON vào clipboard!');
+    }
+
+    function downloadJson() {
+      if (!lastData) return;
+      const blob = new Blob([JSON.stringify(lastData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `flashscore_${Date.now()}.json`;
+      a.click();
+    }
+  </script>
+</body>
+</html>
